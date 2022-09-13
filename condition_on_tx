@@ -1,0 +1,171 @@
+
+
+# parameter set up
+# P(U=1)=p
+# P(X=1|U=u)= psi1  if u=1
+# P(X=1|U=u)= psi2  if u=0
+
+# P(S=1|X=x)= theta1  if u=1
+# P(S=1|X=x)= theta2  if u=0
+
+# P(A=1|X=x, U=u, S=0)= alpha1  if x=1, u=1
+# P(A=1|X=x, U=u, S=0)= alpha2  if x=0, u=1
+# P(A=1|X=x, U=u, S=0)= alpha3  if x=1, u=1
+# P(A=1|X=x, U=u, S=0)= alpha4  if u=0, u=0
+
+# P(Y=1|X=x, U=u, A=a)= kappa1  if x=1, u=1, a=1
+# P(Y=1|X=x, U=u, A=a)= kappa2  if x=0, u=1, a=1
+# P(Y=1|X=x, U=u, A=a)= kappa3  if x=1, u=0, a=1
+# P(Y=1|X=x, U=u, A=a)= kappa4  if x=0, u=0, a=1
+# P(Y=1|X=x, U=u, A=a)= kappa5  if x=1, u=1, a=0
+# P(Y=1|X=x, U=u, A=a)= kappa6  if x=0, u=1, a=0
+# P(Y=1|X=x, U=u, A=a)= kappa7  if x=1, u=0, a=0
+# P(Y=1|X=x, U=u, A=a)= kappa8  if x=0, u=0, a=0
+
+
+rm(list=ls())
+library(dplyr)
+library(data.table)
+library(parallel)
+
+datagen2 <- function(i,p, psi1, psi2, theta1, theta2, alpha1, alpha2, alpha3, alpha4,  kappa1, kappa2, kappa3, kappa4, kappa5, kappa6, kappa7, kappa8){
+  #P(U=1)=p
+  id <- as.numeric(i)
+  U1<-p
+  U0<-1-p
+  #P(X=1|U=u)= psi1  if u=1
+  #P(X=1|U=u)= psi2  if u=0
+  X1_U1<-psi1
+  X1_U0<-psi2
+  X0_U1<-1-psi1
+  X0_U0<-1-psi2
+  # P(S=1|X=x)= theta1  if u=1
+  # P(S=1|X=x)= theta2  if u=0
+  S1_X1<-theta1
+  S1_X0<-theta2
+  S0_X1<-1-theta1
+  S0_X0<-1-theta2
+  #P(X=1)=P(X=1|U=1)*P(U=1)+P(X=1|U=0)*P(U=0)
+  X1<-psi1*p+psi2*(1-p)
+  X0<-1-X1
+  #P(S=1)=P(S=1|X=1)*P(X=1)+P(S=1|X=0)*P(X=0)
+  S1<-S1_X1*X1+S1_X0*X0
+  S0<-1-S1
+  #P(X=1|S=0)=P(S=0|X=1)*P(X=1)/P(S=0)
+  X1_S0<-S0_X1*X1/S0
+  X0_S0<-S0_X0*X0/S0
+  #P(U=1|X=1)=P(X=1|U=1)*P(U=1)/P(X=1)
+  U1_X1<-X1_U1*U1/X1
+  U0_X1<-1-U1_X1
+  #P(U=1|X=0)=P(X=0|U=1)*P(U=1)/P(X=0)
+  U1_X0<-X0_U1*U1/X0
+  U0_X0<-1-U1_X0
+  
+  #P(X=1|S=0,A=1)
+  X1_S0A1<-(alpha1*U1_X1*S0_X1*X1+alpha3*U0_X1*S0_X1*X1)/(alpha1*U1_X1*X1_S0*S0+alpha2*U1_X0*X0_S0*S0+alpha3*U0_X1*X1_S0*S0+alpha4*U0_X0*X0_S0*S0)
+  #P(X=0|S=0,A=1)
+  X0_S0A1<-(alpha2*U1_X0*S0_X0*X0+alpha4*U0_X0*S0_X0*X0)/(alpha1*U1_X1*X1_S0*S0+alpha2*U1_X0*X0_S0*S0+alpha3*U0_X1*X1_S0*S0+alpha4*U0_X0*X0_S0*S0)
+  #P(X=1|S=0,A=0)
+  X1_S0A0<-((1-alpha1)*U1_X1*S0_X1*X1+(1-alpha3)*U0_X1*S0_X1*X1)/((1-alpha1)*U1_X1*X1_S0*S0+(1-alpha2)*U1_X0*X0_S0*S0+(1-alpha3)*U0_X1*X1_S0*S0+(1-alpha4)*U0_X0*X0_S0*S0)
+  
+  #P(X=0|S=0,A=0)
+  X0_S0A0<-((1-alpha2)*U1_X0*S0_X0*X0+(1-alpha4)*U0_X0*S0_X0*X0)/((1-alpha1)*U1_X1*X1_S0*S0+(1-alpha2)*U1_X0*X0_S0*S0+(1-alpha3)*U0_X1*X1_S0*S0+(1-alpha4)*U0_X0*X0_S0*S0)
+  
+  
+  ## beta(a): P[Y(a)=1|S=0]
+  beta1<-kappa1*U1_X1*X1_S0+kappa2*U1_X0*X0_S0+kappa3*U0_X1*X1_S0+kappa4*U0_X0*X0_S0
+  beta0<-kappa5*U1_X1*X1_S0+kappa6*U1_X0*X0_S0+kappa7*U0_X1*X1_S0+kappa8*U0_X0*X0_S0
+  RR_beta<-beta1/beta0
+  RD_beta<-beta1-beta0
+  ## gamma(a=1,a'=1): Pr[Y(a=1)=1|S=0, A=1]
+  gamma11<-(kappa1*alpha1*S0_X1*X1_U1*U1+ 
+            kappa2*alpha2*S0_X0*X0_U1*U1+ 
+            kappa3*alpha3*S0_X1*X1_U0*U0+ 
+            kappa4*alpha4*S0_X0*X0_U0*U0)/(alpha1*U1_X1*X1_S0*S0+alpha2*U1_X0*X0_S0*S0+alpha3*U0_X1*X1_S0*S0+alpha4*U0_X0*X0_S0*S0) 
+  
+  ## gamma(a=0,a'=1): Pr[Y(a=0)=1|S=0, A=1]
+  gamma01<-  (kappa5*alpha1*S0_X1*X1_U1*U1+ 
+              kappa6*alpha2*S0_X0*X0_U1*U1+ 
+              kappa7*alpha3*S0_X1*X1_U0*U0+ 
+              kappa8*alpha4*S0_X0*X0_U0*U0)/(alpha1*U1_X1*X1_S0*S0+alpha2*U1_X0*X0_S0*S0+alpha3*U0_X1*X1_S0*S0+alpha4*U0_X0*X0_S0*S0) 
+  
+  RR_gamma1<-gamma11/gamma01
+  RD_gamma1<-gamma11-gamma01
+  
+  ## gamma(a=1,a'=0): Pr[Y(a=1)=1|S=0, A=0]
+  gamma10<-  (kappa1*(1-alpha1)*S0_X1*X1_U1*U1+ 
+              kappa2*(1-alpha2)*S0_X0*X0_U1*U1+ 
+              kappa3*(1-alpha3)*S0_X1*X1_U0*U0+ 
+              kappa4*(1-alpha4)*S0_X0*X0_U0*U0)/{((1-alpha1)*U1_X1*X1_S0*S0+(1-alpha2)*U1_X0*X0_S0*S0+(1-alpha3)*U0_X1*X1_S0*S0+(1-alpha4)*U0_X0*X0_S0*S0)} 
+  
+  ## gamma(a=0,a'=0): Pr[Y(a=0)=1|S=0, A=0]
+  gamma00<-  (kappa5*(1-alpha1)*S0_X1*X1_U1*U1+ 
+              kappa6*(1-alpha2)*S0_X0*X0_U1*U1+ 
+              kappa7*(1-alpha3)*S0_X1*X1_U0*U0+ 
+              kappa8*(1-alpha4)*S0_X0*X0_U0*U0)/{((1-alpha1)*U1_X1*X1_S0*S0+(1-alpha2)*U1_X0*X0_S0*S0+(1-alpha3)*U0_X1*X1_S0*S0+(1-alpha4)*U0_X0*X0_S0*S0)} 
+  
+  RR_gamma0<-gamma10/gamma00
+  RD_gamma0<-gamma10-gamma00
+  
+  ## condition on treatment
+  #phi(a=1,a'=1)
+  phi11<-kappa1*U1_X1*X1_S0A1+ kappa2*U1_X0*X0_S0A1+kappa3*U0_X1*X1_S0A1+kappa4*U0_X0*X0_S0A1 
+  
+  #phi(a=0,a'=1)
+  phi01<-kappa5*U1_X1*X1_S0A1+ kappa6*U1_X0*X0_S0A1+kappa7*U0_X1*X1_S0A1+kappa8*U0_X0*X0_S0A1 
+  
+  RR_phi1<-phi11/phi01
+  RD_phi1<-phi11-phi01
+  
+  #phi(a=1,a'=0)
+  phi10<-kappa1*U1_X1*X1_S0A0+ kappa2*U1_X0*X0_S0A0+kappa3*U0_X1*X1_S0A0+kappa4*U0_X0*X0_S0A0 
+  
+  #phi(a=0,a'=0)
+  phi00<-kappa5*U1_X1*X1_S0A0+ kappa6*U1_X0*X0_S0A0+kappa7*U0_X1*X1_S0A0+kappa8*U0_X0*X0_S0A0
+  
+  RR_phi0<-phi10/phi00
+  RD_phi0<-phi10-phi00
+  
+  
+   temp <- data.frame(id = id, 
+                     p, psi1, psi2, theta1, theta2, alpha1, alpha2, alpha3, alpha4, kappa1, kappa2, kappa3, kappa4, kappa5, kappa6, kappa7, kappa8,
+                     beta1, beta0, gamma11, gamma01, gamma10, gamma00, phi11, phi01, phi10, phi00,
+                     RR_beta,   RR_gamma1,  RR_gamma0, RR_phi1, RR_phi0,
+                     RD_beta,   RD_gamma1,  RD_gamma0, RD_phi1, RD_phi0)
+  return (temp)
+}
+set.seed(1129)
+seeds = floor(runif(1000)*10^8);
+
+## varying parameters as you wish
+n <- 1
+p<-0.7;
+
+psi1<-0.5;  psi2<-0.3;
+
+theta1<-0.3;  theta2<-0.8;
+
+alpha1<-0.2;     alpha2<-0.8   ;  alpha3<-0.7;  alpha4<-0.2; 
+
+kappa1<- 0.2;     kappa2<- 0.6   ;  kappa3<-0.5;   kappa4 <-0.3;
+
+kappa5<- 0.5;     kappa6<- 0.1   ;  kappa7<-0.25;   kappa8 <-0.4;
+
+
+
+df1 <- lapply(as.list(1:n), FUN=function(ind){
+  datagen2(ind,
+           p=p, psi1=psi1, psi2=psi2, theta1=theta1, theta2=theta2,
+           kappa1=kappa1,   kappa2=kappa2,   kappa3=kappa3,  kappa4=kappa4,  
+           kappa5=kappa5,   kappa6=kappa6,   kappa7=kappa7,  kappa8=kappa8,  
+           alpha1=alpha1,   alpha2=alpha2, alpha3=alpha3, alpha4=alpha4
+  )
+})
+all <- rbindlist(df1)
+
+
+
+
+
+write.csv(all,"~/Downloads/numerical.csv")
+
